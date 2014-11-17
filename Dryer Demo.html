@@ -1,0 +1,195 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<!-- saved from url=(0030)http://23.253.159.242/sub.html -->
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+		
+		<title>Dryer Demo</title>
+		
+		
+		<!-- 1. Add these JavaScript inclusions in the head of your page -->
+		<script type="text/javascript" src="./Dryer Demo_files/jquery-1.10.1.js"></script>
+		<script type="text/javascript" src="./Dryer Demo_files/highcharts.js"></script>
+		
+		<script src="websocket.js"></script>
+		<!-- 2. Add the JavaScript to initialize the chart on document ready -->
+		<script>
+		var chart; // global
+		var total = 0;
+		var buffer = 100;
+		var outlet = [];
+		var trend = [];
+		var yellow = [];
+		var red =[];
+		var count = 0;
+		var last = 0;
+		var last_color = 'green';
+		var last_label = '';
+		var ALARM_LEVEL = 10;
+		var alert_count = 0;
+		var ROTATION = -45;
+		    if (window.WebSocket) {
+        socket = new WebSocket("ws://23.253.159.242:9999/sub");
+        
+        socket.onmessage = function(event) {
+        
+            var msg = JSON.parse(event.data);
+			if((msg.type=="alarm" || msg.type=="alert"))
+				{
+				if(msg.type=="alarm")
+					{
+					console.log(msg.color);
+						//addAlarm(msg.timestamp, msg.color, msg.body);
+						if(msg.color == "yellow" && last_color =="yellow" && (total-last)<5)
+						{
+							//yellow.push([total,ALARM_LEVEL]);
+							//chart.series[1].options.color = "yellow";
+							//chart.series[1].update(chart.series[0].options);
+							if(last_label !=msg.body)
+								chart.xAxis[0].addPlotBand({from:last, to:total, color:'yellow',label:{text:msg.body , rotation:ROTATION}});
+
+							else
+								chart.xAxis[0].addPlotBand({from:last, to:total, color:'yellow'});
+							last_label = msg.body;
+						}
+						else if(msg.color == "red" && last_color == "red" && (total-last)<5)
+						{
+							//red.push([total , ALARM_LEVEL]);
+							if(last_label !=msg.body)
+								chart.xAxis[0].addPlotBand({from:last, to:total,  color:'red' , label:{text:msg.body , rotation:ROTATION}});
+							else
+								chart.xAxis[0].addPlotBand({from:last, to:total, color:'red'});
+							last_label = msg.body;
+						}
+						last = total;
+						last_color = msg.color;
+					}
+				else if(msg.type=="alert")
+					{
+						//addAlert(msg.timestamp, msg.body);
+						alert_count+=1;
+						chart.xAxis[0].addPlotLine({width:3, value:total, color:'blue',  label:{text:alert_count , rotation:ROTATION}});
+						$("#alerts").html( $("#alerts").html() + "<br>"+ alert_count + ":" + msg.body);
+					}
+				}
+			else
+			{
+	
+			//console.log(total + "," + msg.sensor_value + "," + msg.smooth_sensor_value );
+			total = total + 1;
+			if(count < buffer){
+				outlet.push([total,parseInt(msg.sensor_value)]);
+				trend.push([total,parseInt(msg.smooth_sensor_value)]);
+				}
+			else{
+				count =0;				
+			chart.series[0].setData( outlet  ); //eval([total,parseInt(msg.sensor_value)]), true, false);
+			chart.series[1].setData( trend );
+			
+			}
+			count = count+1;
+
+			}
+	
+        }
+        socket.onopen = function(event) {
+            console.log("Web Socket opened!");
+        };
+        socket.onclose = function(event) {
+            console.log("Web Socket closed.");
+        };
+    } else {
+        console.log("Your browser does not support Websockets. (Use Chrome)");
+    }
+		/**
+		 * Request data from the server, add it to the graph and set a timeout to request again
+		 */
+		function requestData() {
+			$.ajax({
+				url: 'live-server-data.php', 
+				success: function(point) {
+					/*var series = chart.series[0],
+						shift = series.data.length > 20; // shift if the series is longer than 20
+		
+					// add the point
+					chart.series[0].addPoint(eval(point), true, shift);
+					
+					// call it again after one second*/
+					
+					setTimeout(requestData, 1000);	
+				},
+				cache: false
+			});
+		}
+			
+		$(document).ready(function() {
+			chart = new Highcharts.Chart({
+				chart: {
+					renderTo: 'container',
+					defaultSeriesType: 'spline',
+					events: {
+						load: requestData
+					}
+				},
+				title: {
+					text: 'Dryer'
+				},
+				xAxis: {/*
+					type: 'datetime',
+					tickPixelInterval: 150,
+					maxZoom: 20 * 1000
+					*/
+					title: {
+						text: 'Seconds'
+					},
+					plotBands:[]
+				},
+				yAxis: {
+					minPadding: 0.2,
+					maxPadding: 0.2,
+					title: {
+						text: 'Temperature',
+						margin: 80
+					}
+				},
+				series: [{
+					name: 'Outlet',
+					data: [],
+					color: 'black'
+				},
+				{
+					name: 'Trend',
+					data: [],
+					color: 'green'
+				}/*,
+				{
+					name: 'Yellow Alarm',
+					data: [],
+					color: 'yellow'
+				}
+				,
+				{
+					name: 'Red Alarm',
+					data: [],
+					color: 'red'
+				}
+				*/
+				
+				]
+			});		
+		});
+		</script>
+		
+	</head>
+	<body>
+		
+		<!-- 3. Add the container -->
+		<div id="container" style="width: 800px; height: 400px; margin: 0 auto" data-highcharts-chart="0"><div class="highcharts-container" id="highcharts-0" style="position: relative; overflow: hidden; width: 800px; height: 400px; text-align: left; line-height: normal; z-index: 0; -webkit-tap-highlight-color: rgba(0, 0, 0, 0);"><svg version="1.1" style="font-family:&quot;Lucida Grande&quot;, &quot;Lucida Sans Unicode&quot;, Arial, Helvetica, sans-serif;font-size:12px;" xmlns="http://www.w3.org/2000/svg" width="800" height="400"><desc>Created with Highcharts 4.0.4</desc><defs><clippath id="highcharts-1"><rect x="0" y="0" width="682" height="268"></rect></clippath></defs><rect x="0" y="0" width="800" height="400" strokeWidth="0" fill="#FFFFFF" class=" highcharts-background"></rect><g class="highcharts-grid" zIndex="1"></g><g class="highcharts-grid" zIndex="1"></g><g class="highcharts-axis" zIndex="2"><text x="449" zIndex="7" text-anchor="middle" transform="translate(0,0)" class=" highcharts-xaxis-title" style="color:#707070;fill:#707070;" visibility="visible" y="338">Seconds</text><path fill="none" d="M 108 321.5 L 790 321.5" stroke="#C0D0E0" stroke-width="1" zIndex="7" visibility="visible"></path></g><g class="highcharts-axis" zIndex="2"><text x="28" zIndex="7" text-anchor="middle" transform="translate(0,0) rotate(270 28 187)" class=" highcharts-yaxis-title" style="color:#707070;fill:#707070;" visibility="visible" y="187">Temperature</text></g><g class="highcharts-series-group" zIndex="3"><g class="highcharts-series" visibility="visible" zIndex="0.1" transform="translate(108,53) scale(1 1)" clip-path="url(#highcharts-1)"><path fill="none" d="M 0 0" stroke-linejoin="round" visibility="visible" stroke="rgba(192,192,192,0.0001)" stroke-width="22" zIndex="2" class=" highcharts-tracker" style=""></path></g><g class="highcharts-markers highcharts-tracker" visibility="visible" zIndex="0.1" transform="translate(108,53) scale(1 1)" clip-path="none" style=""></g><g class="highcharts-series" visibility="visible" zIndex="0.1" transform="translate(108,53) scale(1 1)" clip-path="url(#highcharts-1)"><path fill="none" d="M 0 0" stroke-linejoin="round" visibility="visible" stroke="rgba(192,192,192,0.0001)" stroke-width="22" zIndex="2" class=" highcharts-tracker" style=""></path></g><g class="highcharts-markers highcharts-tracker" visibility="visible" zIndex="0.1" transform="translate(108,53) scale(1 1)" clip-path="none" style=""></g></g><text x="400" text-anchor="middle" class="highcharts-title" zIndex="4" style="color:#333333;font-size:18px;fill:#333333;width:736px;" y="25">Dryer</text><g class="highcharts-legend" zIndex="7" transform="translate(329,364)"><g zIndex="1"><g><g class="highcharts-legend-item" zIndex="1" transform="translate(8,3)"><path fill="none" d="M 0 11 L 16 11" stroke="black" stroke-width="2"></path><path fill="black" d="M 8 7 C 13.328 7 13.328 15 8 15 C 2.6719999999999997 15 2.6719999999999997 7 8 7 Z"></path><text x="21" style="color:#333333;font-size:12px;font-weight:bold;cursor:pointer;fill:#333333;" text-anchor="start" zIndex="2" y="15">Outlet</text></g><g class="highcharts-legend-item" zIndex="1" transform="translate(86.34375,3)"><path fill="none" d="M 0 11 L 16 11" stroke="green" stroke-width="2"></path><path fill="green" d="M 8 7 L 12 11 8 15 4 11 Z"></path><text x="21" y="15" style="color:#333333;font-size:12px;font-weight:bold;cursor:pointer;fill:#333333;" text-anchor="start" zIndex="2">Trend</text></g></g></g></g><g class="highcharts-axis-labels highcharts-xaxis-labels" zIndex="7"></g><g class="highcharts-axis-labels highcharts-yaxis-labels" zIndex="7"></g><g class="highcharts-tooltip" zIndex="8" style="cursor:default;padding:0;white-space:nowrap;" transform="translate(0,-9999)"><path fill="none" d="M 3 0 L 13 0 C 16 0 16 0 16 3 L 16 13 C 16 16 16 16 13 16 L 3 16 C 0 16 0 16 0 13 L 0 3 C 0 0 0 0 3 0" isShadow="true" stroke="black" stroke-opacity="0.049999999999999996" stroke-width="5" transform="translate(1, 1)"></path><path fill="none" d="M 3 0 L 13 0 C 16 0 16 0 16 3 L 16 13 C 16 16 16 16 13 16 L 3 16 C 0 16 0 16 0 13 L 0 3 C 0 0 0 0 3 0" isShadow="true" stroke="black" stroke-opacity="0.09999999999999999" stroke-width="3" transform="translate(1, 1)"></path><path fill="none" d="M 3 0 L 13 0 C 16 0 16 0 16 3 L 16 13 C 16 16 16 16 13 16 L 3 16 C 0 16 0 16 0 13 L 0 3 C 0 0 0 0 3 0" isShadow="true" stroke="black" stroke-opacity="0.15" stroke-width="1" transform="translate(1, 1)"></path><path fill="rgba(249, 249, 249, .85)" d="M 3 0 L 13 0 C 16 0 16 0 16 3 L 16 13 C 16 16 16 16 13 16 L 3 16 C 0 16 0 16 0 13 L 0 3 C 0 0 0 0 3 0"></path><text x="8" zIndex="1" style="font-size:12px;color:#333333;fill:#333333;" y="21"></text></g><text x="790" text-anchor="end" zIndex="8" style="cursor:pointer;color:#909090;font-size:9px;fill:#909090;" y="395">Highcharts.com</text></svg></div></div>
+		<div align="center">
+			<div id="alerts" align="center" style="color:blue;width:800px;height:200px;overflow-y: scroll">
+			<b>Alerts</b>
+			</div>
+		</div>
+		
+		
+	
+
+</body></html>
